@@ -36,7 +36,7 @@ PSTNEW = 1
 PSTRUNNING = 2
 PSTREADY = 3
 PSTWAITING = 4
-PSTTERN = 5
+PSTTERM = 5
 
 PStack = simsym.tuninterpreted("Pstack")
 PCode = simsym.tuninterpreted("Pcode")
@@ -88,52 +88,140 @@ class Semaphore(simsym.tstruct(waiters = ProcessQueue,
                                ctxt = Context,
                                lck = Lock)):
     def _declare_assumptions():
-        simsym.assume(scnt >= 0)
-        simsym.assume(initval >= 0)
+        simsym.assume(self.scnt >= 0)
+        simsym.assume(self.initval >= 0)
 
     @model.methodwrap(iv = simsym.SInt,
                       pt = ProcessTable,
                       sch = LowLevelScheduler,
                       ct = Context,
                       lk = Lock)
-    def init(self):
-        initval = iv
-        scnt = iv
-        ptab = pt
-        sched = sch
-        ctxt = ct
-        lck = lk
-        waiters.init()
+    def init(self,iv,pt,sch.ct,lk):
+        self.initval = iv
+        self.scnt = iv
+        self.ptab = pt
+        self.sched = sch
+        self.ctxt = ct
+        self.lck = lk
+        self.waiters.init()
 
     @model.methodwrap()
     def wait(self):
-        lck.lock()
-        scnt = scnt - 1
-        if scnt < 0:
-            waiters.enqueue(currentp)
-            cpd = ptab.descr_of_process(currentp)
-            cpd.set_process_status_to_waiting()
-            ctxt.switch_context_out()
-            shed.make_unready(currentp)
-            shed.run_next_process()
+        self.lck.lock()
+        self.scnt = self.scnt - 1
+        if self.scnt < 0:
+            self.waiters.enqueue(currentp)
+            self.cpd = self.ptab.descr_of_process(currentp)
+            self.cpd.set_process_status_to_waiting()
+            self.ctxt.switch_context_out()
+            self.shed.make_unready(currentp)
+            self.shed.run_next_process()
         else:
-            sched.continue_current()
-        lck.unlock()
+            self.sched.continue_current()
+        self.lck.unlock()
 
     @model.methodwrap()
     def signal(self):
-        lck.lock()
-        scnt = scnt + 1
-        if scnt <= 0:
-            waiters.remove_first_proc(currentp)
-            cpd = ptab.descr_of_process(currentp)
-            cpd.set_process_status_to_ready()
-            sched.make_ready(currentp)
+        self.lck.lock()
+        self.scnt = self.scnt + 1
+        if self.scnt <= 0:
+            self.waiters.remove_first_proc(currentp)
+            self.cpd = self.ptab.descr_of_process(currentp)
+            self.cpd.set_process_status_to_ready()
+            self.sched.make_ready(currentp)
         else:
-            sched.continue_current()
-        lck.unlock()
+            self.sched.continue_current()
+        self.lck.unlock()
 
+#=========================================
+# ProcessDescr
+#=========================================
 
+class ProcessDescr(simsym.struct(prio = Prio,
+                                 status = ProcStatus,
+                                 regs = GenRegSet,
+                                 statwd = StatusWd,
+                                 ip = simsym.SInt,
+                                 stack = PStack,
+                                 data = PData,
+                                 code = PCode,
+                                 mem = MemDesc,
+                                 memsize = simsym.SInt):
+    def _declare_assumptions():
+        simsym.assume(self.ip >= 0)
+        simsym.assume(self.memsize >= 0)
 
+    @model.methodwrap(pr = Prio,
+                      stat = ProcStatus,
+                      pstack = PStack,
+                      pdata = PData,
+                      pcode = PCode,
+                      mem = MemDesc,
+                      msz = simsym.SInt)
+    def init(self, pr, stat, pstack, pdata, pcode, mem, msz):
+        self.prio = pr,
+        self.status = stat
+        self.regs.init()
+        self.statwd = 0
+        self.ip = 0
+        self.data = pdata
+        self.code = pcode
+        self.mem = mem
+        self.memsize = msz
+
+    @model.methodwrap()
+    def priority(self):
+        return self.prio
+
+    @model.methodwrap(pr = Prio)
+    def set_priority(self, pr):
+        self.prio = pr
+
+    @model.methodwrap()
+    def process_status(self):
+        return self.status
+
+    @model.methodwrap()
+    def set_process_status_to_new(self):
+        self.status = PSTNEW
+
+    @model.methodwrap()
+    def set_process_status_to_terminated(self):
+        self.status = PSTTERM
+
+    @model.methodwrap()
+    def set_process_status_to_ready(self):
+        self.status = PSTREADY
+
+    @model.methodwrap()
+    def set_process_status_to_running(self):
+        self.status = PSTRUNNING
+
+    @model.methodwrap()
+    def set_process_status_to_waiting(self):
+        self.status = PSTWAITING
+
+    @model.methodwrap()
+    def store_size(self):
+        return self.memsize
+
+    @model.methodwrap()
+    def store_descr(self):
+        return self.mem
+
+    @model.methodwrap(newmem = MemDesc)
+    def set_store_descr(self, newmem):
+        self.mem = newmem
+
+    @model.methodwrap()
+    def full_context(self):
+        return self.regs, self.ip, self.statwd, self.stack
+
+    @model.methodwrap(pregs = GenRegSet, pip = simsym.SInt, pstatwd = StatusWd, pstack = PStack)
+    def set_full_context(self, pregs, pip, pstatwd, pstack):
+        self.regs = pregs
+        self.ip = pip
+        self.statuswd = pstatwd
+        self.pstack = pstack
 
 
