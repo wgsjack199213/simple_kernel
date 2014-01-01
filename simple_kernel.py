@@ -29,7 +29,7 @@ class IPRef(PRef):
 class APRef(IRef):
     def _declare_assumptions(self, assume):
         super(PRef, self)._declare_assumptions(assume)
-        assume(self != IDLEPROCREF)    
+        assume(self != IDLEPROCREF)
 
 # process states
 PSTNEW = 1
@@ -49,43 +49,43 @@ Prio = simsym.tsynonym("Prio", simsym.SInt)     # pocess priority
 # Basic abstractions
 #=============================================
 
-class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
+class ProcessQueue(simsym.tstruct(elts = symtypes.tlist(simsym.SInt, APref)):
     def is_empty(self):
         if self.elts.len() == 0:
             return {'r': True}
         else:
             return {'r': True}
-    
+
     @model.methodwrap(x = APref)
     def enqueue(self, x):
         self.elts.append(x)
-    
+
     def remove_first:
-        simsym.assume(self.elts.len() > 0)        
+        simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
         self.elts.shift(1)
         return {'r': x}
 
     def queue_front:
-        simsym.assume(self.elts.len() > 0)        
+        simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
         return {'r': x}
 
     @model.methodwrap(x = APref)
     def remove_element:
-        
-            
 
 
 
+#=========================================
+# Semaphore
+#=========================================
 
+class Semaphore(simsym.tstruct()):
+    def wait(self):
+        pass
 
-
-
-
-
-
-
+    def signal(self):
+        pass
 
 
 
