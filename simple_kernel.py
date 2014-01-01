@@ -80,12 +80,58 @@ class ProcessQueue(simsym.tstruct(elts = symtypes.tlist(simsym.SInt, APref)):
 # Semaphore
 #=========================================
 
-class Semaphore(simsym.tstruct()):
-    def wait(self):
-        pass
+class Semaphore(simsym.tstruct(waiters = ProcessQueue,
+                               scnt = simsym.SInt,
+                               initval = simsym.SInt,
+                               ptab = ProcessTable,
+                               sched = LowLevelScheduler,
+                               ctxt = Context,
+                               lck = Lock)):
+    def _declare_assumptions():
+        simsym.assume(scnt >= 0)
+        simsym.assume(initval >= 0)
 
+    @model.methodwrap(iv = simsym.SInt,
+                      pt = ProcessTable,
+                      sch = LowLevelScheduler,
+                      ct = Context,
+                      lk = Lock)
+    def init(self):
+        initval = iv
+        scnt = iv
+        ptab = pt
+        sched = sch
+        ctxt = ct
+        lck = lk
+        waiters.init()
+
+    @model.methodwrap()
+    def wait(self):
+        lck.lock()
+        scnt = scnt - 1
+        if scnt < 0:
+            waiters.enqueue(currentp)
+            cpd = ptab.descr_of_process(currentp)
+            cpd.set_process_status_to_waiting()
+            ctxt.switch_context_out()
+            shed.make_unready(currentp)
+            shed.run_next_process()
+        else:
+            sched.continue_current()
+        lck.unlock()
+
+    @model.methodwrap()
     def signal(self):
-        pass
+        lck.lock()
+        scnt = scnt + 1
+        if scnt <= 0:
+            waiters.remove_first_proc(currentp)
+            cpd = ptab.descr_of_process(currentp)
+            cpd.set_process_status_to_ready()
+            sched.make_ready(currentp)
+        else:
+            sched.continue_current()
+        lck.unlock()
 
 
 
