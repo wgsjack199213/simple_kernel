@@ -12,7 +12,9 @@ NULLPROCREF = 0
 IDLEPROCREF = MAXPROCS
 
 #=============================================
+#
 # Primary types
+#
 #=============================================
 
 class PRef(symsim.SInt):                # process reference type
@@ -53,10 +55,16 @@ StatusWd = simsym.tuninterpreted("StatusWd")
 INTOFF = 0
 INTON = 1
 
+#=============================================
+#
+# Basic Abstractions
+#
+#=============================================
 
-#=============================================
-# Basic abstractions
-#=============================================
+
+#=========================================
+# Process Queue
+#=========================================
 
 class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
     def _declare_assumptions(self, assume):
@@ -101,6 +109,10 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
             newElts.append(elts[k])
         self.elts = newElts
 
+
+#=========================================
+# Hardware Register
+#=========================================
 
 class HardwareRegisters(simsym.tstruct(hwgenregs = GenRegSet,
                                        hwstack = PStack,
@@ -151,6 +163,19 @@ class HardwareRegisters(simsym.tstruct(hwgenregs = GenRegSet,
     def setIntsOn(self):
         intflg = INTON
 
+#=========================================
+# Lock
+#=========================================
+class Lock(simsym.tstruct(hw = HardwareRegisters)):
+    @model.methodwrap(hwrgs = HardwareRegisters)    
+    def init(self, hwrgs):
+        hw = hwrgs
+
+    def lock(self):
+        hw.setIntsOff
+    
+    def unlock(self):
+        hw.setIntsOn
 
 
 #=========================================
