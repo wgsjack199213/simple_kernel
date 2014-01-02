@@ -462,6 +462,43 @@ class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semap
         self.lck.unlock()
         return s
 
+#=============================================
+#
+# 3.8 Process Creation and Destruction
+#
+#=============================================
+
+class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Scheduler)):
+    @model.methodwrap(ptb = ProcessTable, schd = Scheduler)
+    def init(self, ptb, schd):
+        self.ptab = ptb
+        self.sched = schd
+
+    @model.methodwrap(pprio = Prio,
+                      stat = StatusWd,
+                      stkd = PStack,
+                      datad = PData,
+                      cdd = PCode,
+                      allocin = MemDesc,
+                      totmemsz = simsym.SInt
+                      )
+    def create_process(self, pprio, stat, stkd, datad, cdd, allocin, tomemsz):
+        pd = ProcessDescr()
+        pd.init(pprio, stat, stkd, datad, cdd, allocin, totmemsz)
+        pid = self.ptab.add_process(pd)
+        self.sched.make_ready(pid)
+        proid = pid
+        return pid
+
+    @model.methodwrap()
+    def terminate_proces(self):
+        self.sched.make_unready(procid)
+        self.ptab.del_process(procid)
+
+    @model.methodwrap()
+    def suspend(self):
+        self.sched.suspend_current()
+
 
 #=============================================
 #
@@ -523,7 +560,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 proces_next[pcut] = pid
 
     def nextFromProcPrioQueue(self):
-        
+
 
     @model.methodwrap(self, pid = PRef)
     def isInProcPrioQueue(self):
@@ -538,7 +575,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
 
     @model.methodwrap(pid = PRef)
     def removePrioQueueElem(self, pid):
-        phead = PRef.var()        
+        phead = PRef.var()
         simsym.exists(phead, procs_prev[phead] == NULLPROCREF)
         if (procs_next[phead] != NULLPROCREF):
             procs_prev[procs_next[phead]] = NULLPROCREF
@@ -547,11 +584,11 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         del procs_prev[phead]
         def qprio[phead]
 
-    @model.methodwrap(pid = PRef, newprio = Prio)    
+    @model.methodwrap(pid = PRef, newprio = Prio)
     def reorderProcPrioQueue(pid, newprio):
         removePrioQueueElem(pid)
         enqueueProcPrioQueue(pid, newprio)
-        
+
 
 
 
