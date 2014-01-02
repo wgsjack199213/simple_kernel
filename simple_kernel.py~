@@ -70,7 +70,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
         super(ProcessQueue, self)._declare_assumptions(assume)
         # 'iseq' restriction
         i = simsym.SInt.var()
-        j = simsym.SInt.var()        
+        j = simsym.SInt.var()
         assume(simsym.symnot(simsym.exists(i, simsym.exitsts(j, simsym.symand(i != j, i >= 0, j >= 0, i < self.elts.len(), j < self.elts.len(), self.elts[i] == self.elts[j])))))
 
     def init(self):
@@ -109,7 +109,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
             if k != i:
                 newElts.append(elts[k])
             k = k + 1
-            
+
         self.elts = newElts
 
 
@@ -144,8 +144,8 @@ class HardwareRegisters(simsym.tstruct(hwgenregs = GenRegSet,
     @model.methodwrap(stk = PStack)
     def setStackReg(self, stk):
         self.hwstack = stk
-        
-    
+
+
     def getIP(self):
         return {'r': self.hwip}
 
@@ -170,13 +170,13 @@ class HardwareRegisters(simsym.tstruct(hwgenregs = GenRegSet,
 # Lock
 #=========================================
 class Lock(simsym.tstruct(hw = HardwareRegisters)):
-    @model.methodwrap(hwrgs = HardwareRegisters)    
+    @model.methodwrap(hwrgs = HardwareRegisters)
     def init(self, hwrgs):
         hw = hwrgs
 
     def lock(self):
         hw.setIntsOff
-    
+
     def unlock(self):
         hw.setIntsOn
 
@@ -331,10 +331,57 @@ class ProcessDescr(simsym.struct(prio = Prio,
 
 
 
+#=============================================
+# Context
+#=============================================
+class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = HardwareRegisters)):
 
+    @model.methodwrap(ptb = ProcessTable, shd = LowLevelScheduler, hwregs = HardwareRegisters)
+    def init(self,ptb,shd,hwregs):
+        self.ptab = ptb
+        self.shed = shd
+        self.hw = hwregs
 
+    @model.methodwrap()
+    def save_state(self):
+        cp = self.shed.current_process()
+        pd = self.ptab.descr_of_process(cp)
+        regs = self.hw.get_gp_regs()
+        stk = self.hw.get_stack_regs()
+        ip = self.hw.get_ip()
+        stat = self.get_stat_wd()
+        pd.set_full_context(regs, ip, stat, stk)
 
+    @model.methodwrap()
+    def restore_state(self):
+        cp = self.shed.current_process()
+        pd = self.ptab.descr_of_process(cp)
+        regs,ip,stat,stk = pd.full_context()
+        self.hw.set_gp_regs(regs)
+        self.hw.set_stack_regs(stk)
+        self.hw.set_ip(ip)
+        self.hw.set_stat_wd(stat)
 
+    @model.methodwrap()
+    def swap_out(self):
+        cp = self.shed.current_process()
+        pd = self.ptab.descr_of_process(cp)
+        pd.set_process_status_to_waiting
+        self.save_state
+        self.shed.make_unready(currentp)
+        self.shed.schedule_next
+
+    @model.methodwrap()
+    def swap_in(self):
+        cp = self.shed.current_process()
+        pd = self.ptab.descr_of_process(cp)
+        pd.set_process_status_to_running
+        self.restore_state
+
+    @model.methodwrap()
+    def switch_context(self):
+        self.swap_out()
+        self.swap_in()
 
 
 #=============================================
@@ -354,20 +401,20 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                                   procs_next = simsym.tdict(PRef, PRef))):
     def _declare_assumptions(self, assume):
         super(ProcessQueue, self)._declare_assumptions(assume)
-        # injection restriction        
+        # injection restriction
         k = PRef.var()
         assume(forall(k, implies(qprio.contains(k), symand(procs_prev.contains(k), procs_next.contains(k)))))
         # 'iseq' restriction
         # ? As I use two dicts rather than one queue to define procs, maybe I do not need to specify this restriction?
-        
+
         # priority order restriction
         assume(forall(k, implies(qprio.contains(k), symand(symor(procs_prev[k] == NULLPROCREF, qprio[procs_prev[k]] < qprio[k]), symor(procs_next[k] == NULLPROCREF, qprio[procs_next[k]] > qprio[k]))))
 
     def init(self):
         self.procs_prev = simsym.tdict(PRef, PRef).var()
         self.procs_next = simsym.tdict(PRef, PRef).var()
-   
-    @model.methodwrap(pid = PRef, pprio = Prio)     
+
+    @model.methodwrap(pid = PRef, pprio = Prio)
     def enqueueProcPrioQueue(self, pid, pprio):
         self.qprio.create(pid)
         self.qprio[pid] = pprio
@@ -375,7 +422,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         if procs_prev.empty():                  # empty queue
             procs_prev.create(pid)
             procs_prev[pid] = NULLPROCREF
-            procs_next.create(pid)        
+            procs_next.create(pid)
             procs_next[pid] = NULLPROCREF
         else:                                   # find the right place to add the new pid in
             pcut = PRef.var()
@@ -397,24 +444,36 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 proces_next[pcut] = pid
 
     def nextFromProcPrioQueue(self):
-        ???
+        
 
-    @model.methodwrap(self, pid = PRef) 
+    @model.methodwrap(self, pid = PRef)
     def isInProcPrioQueue(self):
         return {'r': self.procs_prev.contains(pid)}
 
     def isEmptyProcPrioQueue(self):
         return {'r': self.procs_prev.empty()}
 
-    @model.methodwrap(pid = PRef) 
+    @model.methodwrap(pid = PRef)
     def prioOfProcInProcPrioQueue(self, pid):
         return {'r': self.qprio[pid]}
 
-    @model.methodwrap(pid = PRef) 
+    @model.methodwrap(pid = PRef)
     def removePrioQueueElem(self, pid):
-        ???
+        phead = PRef.var()        
+        simsym.exists(phead, procs_prev[phead] == NULLPROCREF)
+        if (procs_next[phead] != NULLPROCREF):
+            procs_prev[procs_next[phead]] = NULLPROCREF
+        # is this the correct way to delete an element from the tdict?
+        del procs_next[phead]
+        del procs_prev[phead]
+        def qprio[phead]
+
+    @model.methodwrap(pid = PRef, newprio = Prio)    
+    def reorderProcPrioQueue(pid, newprio):
+        removePrioQueueElem(pid)
+        enqueueProcPrioQueue(pid, newprio):
         
-        
+
 
 
 
