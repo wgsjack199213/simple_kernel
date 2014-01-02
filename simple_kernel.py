@@ -433,6 +433,34 @@ class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = L
         self.lck.unlock()
         return x
 
+SemaId = simsym.tuninterpreted("SemaId")
+
+class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semaphore))):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        self.lck = l
+        #init stbl
+
+    @model.methodwrap()
+    def new_semaphore(self):
+        self.lck.lock()
+        s = Semaphore()
+        s.init()
+        sid = SemaId().var()
+        self.stbl[sid] = s
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+    def del_semaphore(self, sid):
+        self.lck.lock()
+        del self.stbl[sid]
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+        self.lck.lock()
+        s = self.stbl[sid]
+        self.lck.unlock()
+        return s
 
 
 #=============================================
