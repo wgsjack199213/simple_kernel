@@ -78,10 +78,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
         self.elts.shift(length)
 
     def is_empty(self):
-        if self.elts.len() == 0:
-            return True
-        else:
-            return True
+        return self.elts.len() == 0
 
     @model.methodwrap(x = APref)
     def enqueue(self, x):
@@ -331,7 +328,64 @@ class ProcessDescr(simsym.struct(prio = Prio,
         self.statuswd = pstatwd
         self.pstack = pstack
 
+#=============================================
+# Process Table
+#=============================================
 
+class MemDescr(simsym.struct(left = simsym.SInt, right = simsym.SInt)):
+    def _declare_assumptions(self, assume):
+        super(PRef, self)._declare_assumptions(assume)
+        assume(self.left >= 0)
+
+
+# I use tmap to describe the set
+#map:{element => true/false} map[element] = true <--> element is in the set
+class ProcessTable(simsym.struct(procs = simsym.tdict(PRef, ProcessDescr),
+                                 known_procs = simsym.tmap(IPRef, simsym.SBool),
+                                 free_ids = simsym.tmap(APref, simsym.SBool))):
+    def init(self):
+        known_procs[IDLEPROCREF] = True
+        free_id = PRef.var()
+        free_id = 1
+        while free_id < MAXPROC:
+            free_ids[free_id] = True
+            free_id = free_id + 1
+
+    def create_idle_process(self):
+        stat = PSTREADY
+        
+        pr = Prio.var()
+        # how to use pr ?!
+        prio = pr
+        stwd = 0
+        stkdesc = MemDescr.var()
+        emptymen = MemDescr.var()        
+        stkdesc.left = 0
+        stkdesc.right = 20
+        emptymen.left = 0
+        emptymen.right = 0
+        memsz = 0
+        
+        ipd = ProcessDescr.var()
+        ipd.init(prio, stat, stkdesc, emptymen, emptymen, emptymen, memsz)
+        procs.create(IDLEPROCREF)
+        procs[IDLEPROCREF] = ipd
+
+    @model.methodwrap(pid = APRef, pd = ProcessDescr)
+    def add_process(self, pid, pd):
+        procs.create(pid)
+        procs[pid] = pd
+
+    @model.methodwrap(pid = APRef)
+    def del_process(self, pid):
+        simsym.assume(procs[pid] != None)
+        del procs[pid]
+
+    @model.methodwrap(pid = APRef)
+    def del_process(self, pid):
+        simsym.assume(procs[pid] != None)
+        return procs[pid]
+    
 
 #=============================================
 # Context
@@ -384,122 +438,6 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
     def switch_context(self):
         self.swap_out()
         self.swap_in()
-
-#=============================================
-#
-# 3.7 Messages and Semaphore Tables
-#
-#=============================================
-
-MsgData = simsym.tuninterpreted("MsgData")
-MsgSrc = simsym.tuninterpreted("MsgSrc")
-
-class MboxMsg(simsym.struct(src = MsgSrc, data = MsgData)):
-    @model.methodwrap(ms = MsgSrc, md = MsgData)
-    def init(self, ms, md):
-        self.src = ms
-        self.data = md
-
-    @model.methodwrap()
-    def msgsender(self):
-        return src
-
-    @model.methodwrap()
-    def msgdata(self):
-        return data
-
-class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
-    @model.methodwrap(l = Lock)
-    def init(self, l):
-        # init msgs
-        self.lck = l
-
-    @model.methodwrap(m = MboxMsg)
-    def post_message(self, m):
-        self.lck.lock()
-        self.msgs.append(m)
-        self.lck.unlock()
-
-    @model.methodwrap()
-    def have_messages(self):
-        self.lck.lock()
-        r = (self.msgs.len() > 0)
-        self.lck.unlock()
-        return r
-
-    @model.methodwrap()
-    def next_message(self):
-        self.lck.lock()
-        x = self.msgs[0]
-        self.msgs.shift(1)
-        self.lck.unlock()
-        return x
-
-SemaId = simsym.tuninterpreted("SemaId")
-
-class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semaphore))):
-    @model.methodwrap(l = Lock)
-    def init(self, l):
-        self.lck = l
-        #init stbl
-
-    @model.methodwrap()
-    def new_semaphore(self):
-        self.lck.lock()
-        s = Semaphore()
-        s.init()
-        sid = SemaId().var()
-        self.stbl[sid] = s
-        self.lck.unlock()
-
-    @model.methodwrap(sid = SemaId)
-    def del_semaphore(self, sid):
-        self.lck.lock()
-        del self.stbl[sid]
-        self.lck.unlock()
-
-    @model.methodwrap(sid = SemaId)
-        self.lck.lock()
-        s = self.stbl[sid]
-        self.lck.unlock()
-        return s
-
-#=============================================
-#
-# 3.8 Process Creation and Destruction
-#
-#=============================================
-
-class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Scheduler)):
-    @model.methodwrap(ptb = ProcessTable, schd = Scheduler)
-    def init(self, ptb, schd):
-        self.ptab = ptb
-        self.sched = schd
-
-    @model.methodwrap(pprio = Prio,
-                      stat = StatusWd,
-                      stkd = PStack,
-                      datad = PData,
-                      cdd = PCode,
-                      allocin = MemDesc,
-                      totmemsz = simsym.SInt
-                      )
-    def create_process(self, pprio, stat, stkd, datad, cdd, allocin, tomemsz):
-        pd = ProcessDescr()
-        pd.init(pprio, stat, stkd, datad, cdd, allocin, totmemsz)
-        pid = self.ptab.add_process(pd)
-        self.sched.make_ready(pid)
-        proid = pid
-        return pid
-
-    @model.methodwrap()
-    def terminate_proces(self):
-        self.sched.make_unready(procid)
-        self.ptab.del_process(procid)
-
-    @model.methodwrap()
-    def suspend(self):
-        self.sched.suspend_current()
 
 
 #=============================================
@@ -727,7 +665,122 @@ class CurrentProcess(simsym.struct(currentp = PRef,
         self.currentp = IDLEPROCREF
 
 
+#=============================================
+#
+# 3.7 Messages and Semaphore Tables
+#
+#=============================================
 
+MsgData = simsym.tuninterpreted("MsgData")
+MsgSrc = simsym.tuninterpreted("MsgSrc")
+
+class MboxMsg(simsym.struct(src = MsgSrc, data = MsgData)):
+    @model.methodwrap(ms = MsgSrc, md = MsgData)
+    def init(self, ms, md):
+        self.src = ms
+        self.data = md
+
+    @model.methodwrap()
+    def msgsender(self):
+        return src
+
+    @model.methodwrap()
+    def msgdata(self):
+        return data
+
+class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        # init msgs
+        self.lck = l
+
+    @model.methodwrap(m = MboxMsg)
+    def post_message(self, m):
+        self.lck.lock()
+        self.msgs.append(m)
+        self.lck.unlock()
+
+    @model.methodwrap()
+    def have_messages(self):
+        self.lck.lock()
+        r = (self.msgs.len() > 0)
+        self.lck.unlock()
+        return r
+
+    @model.methodwrap()
+    def next_message(self):
+        self.lck.lock()
+        x = self.msgs[0]
+        self.msgs.shift(1)
+        self.lck.unlock()
+        return x
+
+SemaId = simsym.tuninterpreted("SemaId")
+
+class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semaphore))):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        self.lck = l
+        #init stbl
+
+    @model.methodwrap()
+    def new_semaphore(self):
+        self.lck.lock()
+        s = Semaphore()
+        s.init()
+        sid = SemaId().var()
+        self.stbl[sid] = s
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+    def del_semaphore(self, sid):
+        self.lck.lock()
+        del self.stbl[sid]
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+        self.lck.lock()
+        s = self.stbl[sid]
+        self.lck.unlock()
+        return s
+
+
+#=============================================
+#
+# 3.8 Process Creation and Destruction
+#
+#=============================================
+
+class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Scheduler)):
+    @model.methodwrap(ptb = ProcessTable, schd = Scheduler)
+    def init(self, ptb, schd):
+        self.ptab = ptb
+        self.sched = schd
+
+    @model.methodwrap(pprio = Prio,
+                      stat = StatusWd,
+                      stkd = PStack,
+                      datad = PData,
+                      cdd = PCode,
+                      allocin = MemDesc,
+                      totmemsz = simsym.SInt
+                      )
+    def create_process(self, pprio, stat, stkd, datad, cdd, allocin, tomemsz):
+        pd = ProcessDescr()
+        pd.init(pprio, stat, stkd, datad, cdd, allocin, totmemsz)
+        pid = self.ptab.add_process(pd)
+        self.sched.make_ready(pid)
+        proid = pid
+        return pid
+
+    @model.methodwrap()
+    def terminate_proces(self):
+        self.sched.make_unready(procid)
+        self.ptab.del_process(procid)
+
+    @model.methodwrap()
+    def suspend(self):
+        self.sched.suspend_current()
 
 
 
