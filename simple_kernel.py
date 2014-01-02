@@ -71,7 +71,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
         # 'iseq' restriction
         i = simsym.SInt.var()
         j = simsym.SInt.var()
-        assume(simsym.symnot(simsym.exists(i, simsym.exitsts(j, simsym.symand(i != j, i >= 0, j >= 0, i < self.elts.len(), j < self.elts.len(), self.elts[i] == self.elts[j])))))
+        assume(simsym.symnot(simsym.exists(i, simsym.exists(j, simsym.symand(i != j, i >= 0, j >= 0, i < self.elts.len(), j < self.elts.len(), self.elts[i] == self.elts[j])))))
 
     def init(self):
         length = self.elts.len()
@@ -85,6 +85,8 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
 
     @model.methodwrap(x = APref)
     def enqueue(self, x):
+        simsym.assume(x > NULLPROCREF)
+        simsym.assume(x < IDLEPROCREF)
         self.elts.append(x)
 
     def remove_first(self):
@@ -547,28 +549,29 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
             procs_next[pid] = NULLPROCREF
         else:                                   # find the right place to add the new pid in
             pcut = PRef.var()
-            # find a process with higer priority
-            if simsym.exists(pcut, symand(qprio.contains(pcut), qprio[pcut] >= pprio, symor(qprio[proces_prev[pcut]] < pprio, proces_prev[pcut] == NULLPROCREF))):
-                # --- < pid <= pcut <= ---
-                procs_prev.create(pid)
-                procs_prev[pid] = proces_prev[pcut]
-                procs_next.create(pid)
-                procs_next[pid] = pcut
-                proces_prev[pcut] = pid
-            # find a process with lower priority
-            else simsym.exists(pcut, symand(qprio.contains(pcut), qprio[pcut] <= pprio, symor(qprio[proces_next[pcut]] > pprio, proces_next[pcut] == NULLPROCREF))):
-                # --- <= pcut <= pid < ---
-                procs_next.create(pid)
-                procs_next[pid] = proces_next[pcut]
-                procs_prev.create(pid)
-                procs_prev[pid] = pcut
-                proces_next[pcut] = pid
+            simsym.assume(simsym.exists(pcut, symand(qprio.contains(pcut), symor(symand(qprio[pcut] >= pprio, symor(qprio[proces_prev[pcut]] < pprio, proces_prev[pcut] == NULLPROCREF), symand(qprio[pcut] <= pprio, symor(qprio[proces_next[pcut]] > pprio, proces_next[pcut] == NULLPROCREF)))  )))):
+                # find a process with higer priority
+                if qprio[proces_prev[pcut]] < pprio or proces_prev[pcut] == NULLPROCREF:
+                    # --- < pid <= pcut <= ---
+                    procs_prev.create(pid)
+                    procs_prev[pid] = proces_prev[pcut]
+                    procs_next.create(pid)
+                    procs_next[pid] = pcut
+                    proces_prev[pcut] = pid
+                # find a process with lower priority
+                else:
+                    # --- <= pcut <= pid < ---
+                    procs_next.create(pid)
+                    procs_next[pid] = proces_next[pcut]
+                    procs_prev.create(pid)
+                    procs_prev[pid] = pcut
+                    proces_next[pcut] = pid
 
 
     def next_from_proc_prio_queue(self):
         simsym.assume
         phead = PRef.var()        
-        simsym.exists(phead, procs_prev[phead] == NULLPROCREF)
+        simsym.assume(simsym.exists(phead, procs_prev[phead] == NULLPROCREF))
         if (procs_next[phead] != NULLPROCREF):
             procs_prev[procs_next[phead]] = NULLPROCREF
         # is this the correct way to delete an element from the tdict?
