@@ -24,12 +24,12 @@ class PRef(simsym.SInt):                # process reference type
 
 class IPRef(PRef):
     def _declare_assumptions(self, assume):
-        super(PRef, self)._declare_assumptions(assume)
+        super(IPRef, self)._declare_assumptions(assume)
         assume(self != NULLPROCREF)
 
 class APRef(IPRef):
     def _declare_assumptions(self, assume):
-        super(PRef, self)._declare_assumptions(assume)
+        super(APRef, self)._declare_assumptions(assume)
         assume(self != IDLEPROCREF)
 
 # process states
@@ -41,7 +41,7 @@ PSTTERM = 5
 
 class ProcStatus(simsym.SInt):
     def _declare_assumptions(self, assume):
-        super(PRef, self)._declare_assumptions(assume)
+        super(ProcStatus, self)._declare_assumptions(assume)
         assume(self >= PSTNEW)
         assume(self <= PSTTERM)
     
@@ -64,7 +64,7 @@ INTON = 1
 # types about memory
 class MemDesc(symtypes.tstruct(left = simsym.SInt, right = simsym.SInt)):
     def _declare_assumptions(self, assume):
-        super(PRef, self)._declare_assumptions(assume)
+        super(MemDesc, self)._declare_assumptions(assume)
         assume(self.left >= 0)
 
 #=============================================
@@ -206,7 +206,7 @@ class ProcessDescr(simsym.tstruct(prio = Prio,
                                  code = PCode,
                                  mem = MemDesc,
                                  memsize = simsym.SInt)):
-    def _declare_assumptions():
+    def _declare_assumptions(self, assume):
         simsym.assume(self.ip >= 0)
         simsym.assume(self.memsize >= 0)
 
@@ -403,7 +403,7 @@ class Semaphore(simsym.tstruct(waiters = ProcessQueue,
                                sched = LowLevelScheduler,
                                ctxt = Context,
                                lck = Lock)):
-    def _declare_assumptions():
+    def _declare_assumptions(self, assume):
         simsym.assume(self.scnt >= 0)
         simsym.assume(self.initval >= 0)
 
@@ -466,7 +466,7 @@ class ProcPrioQueue(simsym.tstruct(qprio = symtypes.tdict(PRef, Prio),
                                   procs_prev = symtypes.tdict(PRef, PRef),
                                   procs_next = symtypes.tdict(PRef, PRef))):
     def _declare_assumptions(self, assume):
-        super(ProcessQueue, self)._declare_assumptions(assume)
+        super(ProcPrioQueue, self)._declare_assumptions(assume)
         # injection restriction
         k = PRef.var()
         assume(forall(k, implies(qprio.contains(k), symand(procs_prev.contains(k), procs_next.contains(k)))))
