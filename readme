@@ -1,0 +1,4 @@
+魏达和王国赛合作完成本次作业
+王国赛主要负责HardwareRegisters, ProcessQueue, PriorityQueue, ProcessTable, CurrentProcess等部分的建模
+魏达主要负责Semaphore, ProcessDescr, Context, Mailbox, SemaphoreTable, UserLibrary等部分的建模
+两个人都完成的了全部的任务
