@@ -523,7 +523,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 proces_next[pcut] = pid
 
     def nextFromProcPrioQueue(self):
-        ???
+        
 
     @model.methodwrap(self, pid = PRef)
     def isInProcPrioQueue(self):
@@ -538,8 +538,20 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
 
     @model.methodwrap(pid = PRef)
     def removePrioQueueElem(self, pid):
-        ???
+        phead = PRef.var()        
+        simsym.exists(phead, procs_prev[phead] == NULLPROCREF)
+        if (procs_next[phead] != NULLPROCREF):
+            procs_prev[procs_next[phead]] = NULLPROCREF
+        # is this the correct way to delete an element from the tdict?
+        del procs_next[phead]
+        del procs_prev[phead]
+        def qprio[phead]
 
+    @model.methodwrap(pid = PRef, newprio = Prio)    
+    def reorderProcPrioQueue(pid, newprio):
+        removePrioQueueElem(pid)
+        enqueueProcPrioQueue(pid, newprio)
+        
 
 
 
