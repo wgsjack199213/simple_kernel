@@ -696,7 +696,7 @@ class MboxMsg(simsym.tstruct(src = MsgSrc, data = MsgData)):
     def msgdata(self):
         return self.data
 
-class Mailbox(simsym.tstruct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
+class Mailbox(simsym.tstruct(msgs = symtypes.tlist(simsym.SInt, simsym.SInt), lck = Lock)):
     @model.methodwrap(l = Lock)
     def init(self, l):
         # init msgs
@@ -725,7 +725,7 @@ class Mailbox(simsym.tstruct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = 
 
 SemaId = simsym.tuninterpreted("SemaId")
 
-class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semaphore))):
+class SemaphoreTable(simsym.tstruct(lck = Lock, stbl = symtypes.tdict(SemaId, Semaphore))):
     @model.methodwrap(l = Lock)
     def init(self, l):
         self.lck = l
@@ -760,8 +760,8 @@ class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semap
 #
 #=============================================
 
-class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Scheduler)):
-    @model.methodwrap(ptb = ProcessTable, schd = Scheduler)
+class UserLibrary(simsym.tstruct(procid = IPRef, ptab = ProcessTable, sched = LowLevelScheduler)):
+    @model.methodwrap(ptb = ProcessTable, schd = LowLevelScheduler)
     def init(self, ptb, schd):
         self.ptab = ptb
         self.sched = schd
@@ -791,6 +791,6 @@ class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Sch
     def suspend(self):
         self.sched.suspend_current()
 
-
+model_class = ProcessDescr
 
 
