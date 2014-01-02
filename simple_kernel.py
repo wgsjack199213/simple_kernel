@@ -383,6 +383,57 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
         self.swap_out()
         self.swap_in()
 
+#=============================================
+#
+# 3.7 Messages and Semaphore Tables
+#
+#=============================================
+
+MsgData = simsym.tuninterpreted("MsgData")
+MsgSrc = simsym.tuninterpreted("MsgSrc")
+
+class MboxMsg(simsym.struct(src = MsgSrc, data = MsgData)):
+    @model.methodwrap(ms = MsgSrc, md = MsgData)
+    def init(self, ms, md):
+        self.src = ms
+        self.data = md
+
+    @model.methodwrap()
+    def msgsender(self):
+        return src
+
+    @model.methodwrap()
+    def msgdata(self):
+        return data
+
+class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        # init msgs
+        self.lck = l
+
+    @model.methodwrap(m = MboxMsg)
+    def post_message(self, m):
+        self.lck.lock()
+        self.msgs.append(m)
+        self.lck.unlock()
+
+    @model.methodwrap()
+    def have_messages(self):
+        self.lck.lock()
+        r = (self.msgs.len() > 0)
+        self.lck.unlock()
+        return r
+
+    @model.methodwrap()
+    def next_message(self):
+        self.lck.lock()
+        x = self.msgs[0]
+        self.msgs.shift(1)
+        self.lck.unlock()
+        return x
+
+
 
 #=============================================
 #
