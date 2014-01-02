@@ -383,6 +383,8 @@ class ProcessTable(simsym.struct(procs = simsym.tdict(PRef, ProcessDescr),
 
     @model.methodwrap(pid = APRef)
     def del_process(self, pid):
+        simsym.assume(procs[pid] != None)
+        return procs[pid]
     
 
 #=============================================

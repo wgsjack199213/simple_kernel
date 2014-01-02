@@ -16,7 +16,7 @@ IDLEPROCREF = MAXPROCS
 #
 #=============================================
 
-class PRef(symsim.SInt):                # process reference type
+class PRef(simsym.SInt):                # process reference type
     def _declare_assumptions(self, assume):
         super(PRef, self)._declare_assumptions(assume)
         assume(self >= NULLPROCREF)
@@ -27,7 +27,7 @@ class IPRef(PRef):
         super(PRef, self)._declare_assumptions(assume)
         assume(self != NULLPROCREF)
 
-class APRef(IRef):
+class APRef(IPRef):
     def _declare_assumptions(self, assume):
         super(PRef, self)._declare_assumptions(assume)
         assume(self != IDLEPROCREF)
@@ -38,6 +38,13 @@ PSTRUNNING = 2
 PSTREADY = 3
 PSTWAITING = 4
 PSTTERM = 5
+
+class ProcStatus(simsym.SInt):
+    def _declare_assumptions(self, assume):
+        super(PRef, self)._declare_assumptions(assume)
+        assume(self >= PSTNEW)
+        assume(self <= PSTTERM)
+    
 
 # types about process
 PStack = simsym.tuninterpreted("PStack")
@@ -54,6 +61,12 @@ StatusWd = simsym.tuninterpreted("StatusWd")
 INTOFF = 0
 INTON = 1
 
+# types about memory
+class MemDesc(symtypes.tstruct(left = simsym.SInt, right = simsym.SInt)):
+    def _declare_assumptions(self, assume):
+        super(PRef, self)._declare_assumptions(assume)
+        assume(self.left >= 0)
+
 #=============================================
 #
 # 3.4 Basic Abstractions
@@ -65,7 +78,7 @@ INTON = 1
 # Process Queue
 #=========================================
 
-class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
+class ProcessQueue(simsym.tstruct(elts = symtypes.tlist(simsym.SInt, APRef))):
     def _declare_assumptions(self, assume):
         super(ProcessQueue, self)._declare_assumptions(assume)
         # 'iseq' restriction
@@ -80,7 +93,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
     def is_empty(self):
         return self.elts.len() == 0
 
-    @model.methodwrap(x = APref)
+    @model.methodwrap(x = APRef)
     def enqueue(self, x):
         simsym.assume(x > NULLPROCREF)
         simsym.assume(x < IDLEPROCREF)
@@ -97,7 +110,7 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
         x = self.elts[0]
         return x
 
-    @model.methodwrap(x = APref)
+    @model.methodwrap(x = APRef)
     def remove_element(self, x):
         i = simsym.SInt.var()
         simsym.assume(simsym.exists(i, simsym.symand(self.elts.len() > i, self.elts[i] == x)))
@@ -179,69 +192,11 @@ class Lock(simsym.tstruct(hw = HardwareRegisters)):
     def unlock(self):
         hw.setIntsOn
 
-
-#=========================================
-# Semaphore
-#=========================================
-
-class Semaphore(simsym.tstruct(waiters = ProcessQueue,
-                               scnt = simsym.SInt,
-                               initval = simsym.SInt,
-                               ptab = ProcessTable,
-                               sched = LowLevelScheduler,
-                               ctxt = Context,
-                               lck = Lock)):
-    def _declare_assumptions():
-        simsym.assume(self.scnt >= 0)
-        simsym.assume(self.initval >= 0)
-
-    @model.methodwrap(iv = simsym.SInt,
-                      pt = ProcessTable,
-                      sch = LowLevelScheduler,
-                      ct = Context,
-                      lk = Lock)
-    def init(self,iv,pt,sch.ct,lk):
-        self.initval = iv
-        self.scnt = iv
-        self.ptab = pt
-        self.sched = sch
-        self.ctxt = ct
-        self.lck = lk
-        self.waiters.init()
-
-    @model.methodwrap()
-    def wait(self):
-        self.lck.lock()
-        self.scnt = self.scnt - 1
-        if self.scnt < 0:
-            self.waiters.enqueue(currentp)
-            self.cpd = self.ptab.descr_of_process(currentp)
-            self.cpd.set_process_status_to_waiting()
-            self.ctxt.switch_context_out()
-            self.shed.make_unready(currentp)
-            self.shed.run_next_process()
-        else:
-            self.sched.continue_current()
-        self.lck.unlock()
-
-    @model.methodwrap()
-    def signal(self):
-        self.lck.lock()
-        self.scnt = self.scnt + 1
-        if self.scnt <= 0:
-            self.waiters.remove_first_proc(currentp)
-            self.cpd = self.ptab.descr_of_process(currentp)
-            self.cpd.set_process_status_to_ready()
-            self.sched.make_ready(currentp)
-        else:
-            self.sched.continue_current()
-        self.lck.unlock()
-
 #=========================================
 # Process Descriptor
 #=========================================
 
-class ProcessDescr(simsym.struct(prio = Prio,
+class ProcessDescr(simsym.tstruct(prio = Prio,
                                  status = ProcStatus,
                                  regs = GenRegSet,
                                  statwd = StatusWd,
@@ -250,7 +205,7 @@ class ProcessDescr(simsym.struct(prio = Prio,
                                  data = PData,
                                  code = PCode,
                                  mem = MemDesc,
-                                 memsize = simsym.SInt):
+                                 memsize = simsym.SInt)):
     def _declare_assumptions():
         simsym.assume(self.ip >= 0)
         simsym.assume(self.memsize >= 0)
@@ -332,17 +287,11 @@ class ProcessDescr(simsym.struct(prio = Prio,
 # Process Table
 #=============================================
 
-class MemDescr(simsym.struct(left = simsym.SInt, right = simsym.SInt)):
-    def _declare_assumptions(self, assume):
-        super(PRef, self)._declare_assumptions(assume)
-        assume(self.left >= 0)
-
-
 # I use tmap to describe the set
 #map:{element => true/false} map[element] = true <--> element is in the set
-class ProcessTable(simsym.struct(procs = simsym.tdict(PRef, ProcessDescr),
+class ProcessTable(simsym.tstruct(procs = symtypes.tdict(PRef, ProcessDescr),
                                  known_procs = simsym.tmap(IPRef, simsym.SBool),
-                                 free_ids = simsym.tmap(APref, simsym.SBool))):
+                                 free_ids = simsym.tmap(APRef, simsym.SBool))):
     def init(self):
         known_procs[IDLEPROCREF] = True
         free_id = PRef.var()
@@ -385,12 +334,15 @@ class ProcessTable(simsym.struct(procs = simsym.tdict(PRef, ProcessDescr),
     def del_process(self, pid):
         simsym.assume(procs[pid] != None)
         return procs[pid]
-    
+
+#=======================
+# I don't know...
+LowLevelScheduler = simsym.tuninterpreted("LowLevelScheduler")   
 
 #=============================================
 # Context
 #=============================================
-class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = HardwareRegisters)):
+class Context(simsym.tstruct(ptab = ProcessTable, shed = LowLevelScheduler, hw = HardwareRegisters)):
 
     @model.methodwrap(ptb = ProcessTable, shd = LowLevelScheduler, hwregs = HardwareRegisters)
     def init(self,ptb,shd,hwregs):
@@ -440,6 +392,64 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
         self.swap_in()
 
 
+#=========================================
+# Semaphore
+#=========================================
+
+class Semaphore(simsym.tstruct(waiters = ProcessQueue,
+                               scnt = simsym.SInt,
+                               initval = simsym.SInt,
+                               ptab = ProcessTable,
+                               sched = LowLevelScheduler,
+                               ctxt = Context,
+                               lck = Lock)):
+    def _declare_assumptions():
+        simsym.assume(self.scnt >= 0)
+        simsym.assume(self.initval >= 0)
+
+    @model.methodwrap(iv = simsym.SInt,
+                      pt = ProcessTable,
+                      sch = LowLevelScheduler,
+                      ct = Context,
+                      lk = Lock)
+    def init(self,iv,pt,sch,ct,lk):
+        self.initval = iv
+        self.scnt = iv
+        self.ptab = pt
+        self.sched = sch
+        self.ctxt = ct
+        self.lck = lk
+        self.waiters.init()
+
+    @model.methodwrap()
+    def wait(self):
+        self.lck.lock()
+        self.scnt = self.scnt - 1
+        if self.scnt < 0:
+            self.waiters.enqueue(currentp)
+            self.cpd = self.ptab.descr_of_process(currentp)
+            self.cpd.set_process_status_to_waiting()
+            self.ctxt.switch_context_out()
+            self.shed.make_unready(currentp)
+            self.shed.run_next_process()
+        else:
+            self.sched.continue_current()
+        self.lck.unlock()
+
+    @model.methodwrap()
+    def signal(self):
+        self.lck.lock()
+        self.scnt = self.scnt + 1
+        if self.scnt <= 0:
+            self.waiters.remove_first_proc(currentp)
+            self.cpd = self.ptab.descr_of_process(currentp)
+            self.cpd.set_process_status_to_ready()
+            self.sched.make_ready(currentp)
+        else:
+            self.sched.continue_current()
+        self.lck.unlock()
+
+
 #=============================================
 #
 # 3.5 Priority Queue
@@ -452,9 +462,9 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
 # [(current.id => current.prev().id), (current.id => current.next().id)]
 # use tdict for implementation
 # Notice the sets of keys of the two dictionary procs_prev and procs_next shold be identical!!!
-class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
-                                  procs_prev = simsym.tdict(PRef, PRef),
-                                  procs_next = simsym.tdict(PRef, PRef))):
+class ProcPrioQueue(simsym.tstruct(qprio = symtypes.tdict(PRef, Prio),
+                                  procs_prev = symtypes.tdict(PRef, PRef),
+                                  procs_next = symtypes.tdict(PRef, PRef))):
     def _declare_assumptions(self, assume):
         super(ProcessQueue, self)._declare_assumptions(assume)
         # injection restriction
@@ -464,7 +474,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         # ? As I use two dicts rather than one queue to define procs, maybe I do not need to specify this restriction?
 
         # priority order restriction
-        assume(forall(k, implies(qprio.contains(k), symand(symor(procs_prev[k] == NULLPROCREF, qprio[procs_prev[k]] < qprio[k]), symor(procs_next[k] == NULLPROCREF, qprio[procs_next[k]] > qprio[k]))))
+        assume(forall(k, implies(qprio.contains(k), symand(symor(procs_prev[k] == NULLPROCREF, qprio[procs_prev[k]] < qprio[k]), symor(procs_next[k] == NULLPROCREF, qprio[procs_next[k]] > qprio[k])))))
 
     def init(self):
         self.procs_prev = simsym.tdict(PRef, PRef).var()
@@ -487,23 +497,23 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
             procs_next[pid] = NULLPROCREF
         else:                                   # find the right place to add the new pid in
             pcut = PRef.var()
-            simsym.assume(simsym.exists(pcut, symand(qprio.contains(pcut), symor(symand(qprio[pcut] >= pprio, symor(qprio[proces_prev[pcut]] < pprio, proces_prev[pcut] == NULLPROCREF), symand(qprio[pcut] <= pprio, symor(qprio[proces_next[pcut]] > pprio, proces_next[pcut] == NULLPROCREF)))  )))):
-                # find a process with higer priority
-                if qprio[proces_prev[pcut]] < pprio or proces_prev[pcut] == NULLPROCREF:
-                    # --- < pid <= pcut <= ---
-                    procs_prev.create(pid)
-                    procs_prev[pid] = proces_prev[pcut]
-                    procs_next.create(pid)
-                    procs_next[pid] = pcut
-                    proces_prev[pcut] = pid
-                # find a process with lower priority
-                else:
-                    # --- <= pcut <= pid < ---
-                    procs_next.create(pid)
-                    procs_next[pid] = proces_next[pcut]
-                    procs_prev.create(pid)
-                    procs_prev[pid] = pcut
-                    proces_next[pcut] = pid
+            simsym.assume(simsym.exists(pcut, symand(qprio.contains(pcut), symor(symand(qprio[pcut] >= pprio, symor(qprio[proces_prev[pcut]] < pprio, proces_prev[pcut] == NULLPROCREF), symand(qprio[pcut] <= pprio, symor(qprio[proces_next[pcut]] > pprio, proces_next[pcut] == NULLPROCREF)))))))
+            # find a process with higer priority
+            if qprio[proces_prev[pcut]] < pprio or proces_prev[pcut] == NULLPROCREF:
+                # --- < pid <= pcut <= ---
+                procs_prev.create(pid)
+                procs_prev[pid] = proces_prev[pcut]
+                procs_next.create(pid)
+                procs_next[pid] = pcut
+                proces_prev[pcut] = pid
+            # find a process with lower priority
+            else:
+                # --- <= pcut <= pid < ---
+                procs_next.create(pid)
+                procs_next[pid] = proces_next[pcut]
+                procs_prev.create(pid)
+                procs_prev[pid] = pcut
+                proces_next[pcut] = pid
 
 
     def next_from_proc_prio_queue(self):
@@ -515,11 +525,11 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         # is this the correct way to delete an element from the tdict?
         del procs_next[phead]
         del procs_prev[phead]
-        def qprio[phead]
+        del qprio[phead]
 
         return phead;
 
-    @model.methodwrap(self, pid = PRef)
+    @model.methodwrap(pid = PRef)
     def is_in_proc_prio_queue(self):
         simsym.assume(pid >= NULLPROCREF)
         simsym.assume(pid <= IDLEPROCREF)
@@ -550,7 +560,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         # is this the correct way to delete an element from the tdict?
         del procs_next[phead]
         del procs_prev[phead]
-        def qprio[phead]
+        del qprio[phead]
 
     @model.methodwrap(pid = PRef, newprio = Prio)    
     def reorder_proc_prio_queue(pid, newprio):
@@ -569,7 +579,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
 # 3.6 Current Process and Prioritised Read Queue
 #
 #=============================================
-class CurrentProcess(simsym.struct(currentp = PRef,
+class CurrentProcess(simsym.tstruct(currentp = PRef,
                                    readyqp = ProcPrioQueue,
                                    ctxt = Context,
                                    lck = Lock,
@@ -591,7 +601,7 @@ class CurrentProcess(simsym.struct(currentp = PRef,
         self.currentp = pid
 
     def make_ready(self):
-        # Where the hell does the 'ptab' come from?!?! 凸=_=
+        # Where the hell does the 'ptab' come from?!?! =_=
         # I don't know why there shoud be an 'exists' here =___=
         pd = self.ptab.descr_of_process(self.currentp)
         prio = pd.process_priority()
@@ -628,7 +638,7 @@ class CurrentProcess(simsym.struct(currentp = PRef,
             self.lck.unlock()
 
     def suspend_current(self):
-        # Where the hell does the 'ptab' come from again?!?! 凸=_=
+        # Where the hell does the 'ptab' come from again?!?! =_=
         self.lck.lock()
         self.ctxt.save_state()
         pd = self.ptab.descr_of_process(self.currentp)
@@ -674,21 +684,19 @@ class CurrentProcess(simsym.struct(currentp = PRef,
 MsgData = simsym.tuninterpreted("MsgData")
 MsgSrc = simsym.tuninterpreted("MsgSrc")
 
-class MboxMsg(simsym.struct(src = MsgSrc, data = MsgData)):
+class MboxMsg(simsym.tstruct(src = MsgSrc, data = MsgData)):
     @model.methodwrap(ms = MsgSrc, md = MsgData)
     def init(self, ms, md):
         self.src = ms
         self.data = md
 
-    @model.methodwrap()
     def msgsender(self):
-        return src
+        return self.src
 
-    @model.methodwrap()
     def msgdata(self):
-        return data
+        return self.data
 
-class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
+class Mailbox(simsym.tstruct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
     @model.methodwrap(l = Lock)
     def init(self, l):
         # init msgs
@@ -700,7 +708,7 @@ class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = L
         self.msgs.append(m)
         self.lck.unlock()
 
-    @model.methodwrap()
+
     def have_messages(self):
         self.lck.lock()
         r = (self.msgs.len() > 0)
@@ -739,6 +747,7 @@ class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semap
         self.lck.unlock()
 
     @model.methodwrap(sid = SemaId)
+    def get_semaphore(self, sid):
         self.lck.lock()
         s = self.stbl[sid]
         self.lck.unlock()
