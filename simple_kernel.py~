@@ -433,6 +433,71 @@ class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = L
         self.lck.unlock()
         return x
 
+SemaId = simsym.tuninterpreted("SemaId")
+
+class SemaphoreTable(simsym.struct(lck = Lock, stbl = simsym.tdict(SemaId, Semaphore))):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        self.lck = l
+        #init stbl
+
+    @model.methodwrap()
+    def new_semaphore(self):
+        self.lck.lock()
+        s = Semaphore()
+        s.init()
+        sid = SemaId().var()
+        self.stbl[sid] = s
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+    def del_semaphore(self, sid):
+        self.lck.lock()
+        del self.stbl[sid]
+        self.lck.unlock()
+
+    @model.methodwrap(sid = SemaId)
+        self.lck.lock()
+        s = self.stbl[sid]
+        self.lck.unlock()
+        return s
+
+#=============================================
+#
+# 3.8 Process Creation and Destruction
+#
+#=============================================
+
+class UserLibrary(simsym.struct(procid = IPREF, ptab = ProcessTable, sched = Scheduler)):
+    @model.methodwrap(ptb = ProcessTable, schd = Scheduler)
+    def init(self, ptb, schd):
+        self.ptab = ptb
+        self.sched = schd
+
+    @model.methodwrap(pprio = Prio,
+                      stat = StatusWd,
+                      stkd = PStack,
+                      datad = PData,
+                      cdd = PCode,
+                      allocin = MemDesc,
+                      totmemsz = simsym.SInt
+                      )
+    def create_process(self, pprio, stat, stkd, datad, cdd, allocin, tomemsz):
+        pd = ProcessDescr()
+        pd.init(pprio, stat, stkd, datad, cdd, allocin, totmemsz)
+        pid = self.ptab.add_process(pd)
+        self.sched.make_ready(pid)
+        proid = pid
+        return pid
+
+    @model.methodwrap()
+    def terminate_proces(self):
+        self.sched.make_unready(procid)
+        self.ptab.del_process(procid)
+
+    @model.methodwrap()
+    def suspend(self):
+        self.sched.suspend_current()
 
 
 #=============================================
@@ -499,6 +564,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 procs_prev[pid] = pcut
                 proces_next[pcut] = pid
 
+
     def next_from_proc_prio_queue(self):
         simsym.assume
         phead = PRef.var()        
@@ -511,8 +577,6 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         def qprio[phead]
 
         return phead;
-
-        
 
     @model.methodwrap(self, pid = PRef)
     def is_in_proc_prio_queue(self):
@@ -531,6 +595,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         return self.qprio[pid]
 
     @model.methodwrap(pid = PRef)
+
     def remove_prio_queue_elem(self, pid):
         simsym.assume(pid >= NULLPROCREF)
         simsym.assume(pid <= IDLEPROCREF)
@@ -540,6 +605,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
             procs_prev[procs_next[pid]] = procs_prev[pid]
         if (procs_prev[pid] != NULLPROCREF):
             procs_next[procs_prev[pid]] = procs_next[pid]
+
         # is this the correct way to delete an element from the tdict?
         del procs_next[phead]
         del procs_prev[phead]
