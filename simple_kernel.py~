@@ -643,17 +643,64 @@ class CurrentProcess(simsym.struct(currentp = PRef,
         self.ctxt = ct
 
     def current_process(self):
-        return currentp
+        return self.currentp
     
     @model.methodwrap(pid = PRef)
     def make_current(self, pid):
         simsym.assume(pid >= NULLPROCREF)
         simsym.assume(pid <= IDLEPROCREF)
-        currentp = pid
+        self.currentp = pid
 
-    def make_read
+    @model.methodwrap(ptab = ProcessTable)
+    def make_ready(self, ptab):
+        # Where the hell does the 'ptab' come from?!?! 凸=_=
+        # I don't know why there shoud be an 'exists' here =___=
+        pd = ptab.descr_of_process(self.currentp)
+        prio = pd.process_priority()
+        pd.set_process_status_to_ready()
+        self.readyqp.enqueue_proc_prio_queue(prio)
+        return pd, prio
 
+    def reload_current(self):
+        self.currentp = self.currentp
+        self.readyqp = self.readyqp
 
+    def continue_current(self):
+        reload_current()
+        ctxt.restore_state()
+
+    @model.methodwrap(p = PRef)
+    def is_current_proc(self, p):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        return self.currentp == p
+    
+    @model.methodwrap(pid = PRef)
+    def make_unready(self, pid):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        self.lck.lock()
+        if is_current_proc(pid):
+            self.ctxt.save_state()
+            run_next_process()
+            self.lck.unlock()
+        else:
+            remove_prio_queue_elem(pid)
+            self.lck.unlock()
+
+    @model.methodwrap(ptab = ProcessTable)
+    def suspend_current(self, ptab):
+        # Where the hell does the 'ptab' come from again?!?! 凸=_=
+        self.lck.lock()
+        self.ctxt.save_state()
+        pd = ptab.descr_of_process(self.currentp)
+        prio = pd.process_priority()
+        pd.set_process_status_to_waiting()
+        self.readyqp.enqueue_proc_prio_queue(currentp, prio)
+        run_next_process()
+
+        return pd, prio
+        
 
 
 
