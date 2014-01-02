@@ -12,7 +12,7 @@ IDLEPROCREF = MAXPROCS
 
 #=============================================
 #
-# 3.1 Primary Types
+# 3.3 Primary Types
 #
 #=============================================
 
@@ -79,9 +79,9 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
 
     def is_empty(self):
         if self.elts.len() == 0:
-            return {'r': True}
+            return True
         else:
-            return {'r': True}
+            return True
 
     @model.methodwrap(x = APref)
     def enqueue(self, x):
@@ -91,12 +91,12 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
         simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
         self.elts.shift(1)
-        return {'r': x}
+        return x
 
     def queue_front(self):
         simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
-        return {'r': x}
+        return x
 
     @model.methodwrap(x = APref)
     def remove_element(self, x):
@@ -132,38 +132,38 @@ class HardwareRegisters(simsym.tstruct(hwgenregs = GenRegSet,
         self.hwip = 0
 
     @model.methodwrap(regs = GenRegSet)
-    def setGPRegs(self, regs):
+    def set_gp_regs(self, regs):
         self.hwgenregs = regs
 
-    def getGPRegs(self):
-        return {'r': self.hwgenregs}
+    def get_gp_regs(self):
+        return self.hwgenregs
 
-    def getStackReg(self):
-        return {'r': self.hwstack}
+    def get_stack_reg(self):
+        return self.hwstack
 
     @model.methodwrap(stk = PStack)
-    def setStackReg(self, stk):
+    def set_stack_reg(self, stk):
         self.hwstack = stk
 
 
-    def getIP(self):
-        return {'r': self.hwip}
+    def get_ip(self):
+        return self.hwip
 
     @model.methodwrap(ip = simsym.SInt)
-    def setIP(self, ip):
+    def set_ip(self, ip):
         self.hwip = ip
 
-    def getStatWd(self):
-        return {'r': self.hwstatwd}
+    def get_stat_wd(self):
+        return self.hwstatwd
 
     @model.methodwrap(stwd = StatusWd)
-    def setStatWd(self, stwd):
+    def set_stat_wd(self, stwd):
         self.hwstatwd = stwd
 
-    def setIntsOff(self):
+    def set_ints_off(self):
         intflg = INTOFF
 
-    def setIntsOn(self):
+    def set_ints_on(self):
         intflg = INTON
 
 #=========================================
@@ -383,6 +383,57 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
         self.swap_out()
         self.swap_in()
 
+#=============================================
+#
+# 3.7 Messages and Semaphore Tables
+#
+#=============================================
+
+MsgData = simsym.tuninterpreted("MsgData")
+MsgSrc = simsym.tuninterpreted("MsgSrc")
+
+class MboxMsg(simsym.struct(src = MsgSrc, data = MsgData)):
+    @model.methodwrap(ms = MsgSrc, md = MsgData)
+    def init(self, ms, md):
+        self.src = ms
+        self.data = md
+
+    @model.methodwrap()
+    def msgsender(self):
+        return src
+
+    @model.methodwrap()
+    def msgdata(self):
+        return data
+
+class Mailbox(simsym.struct(msgs = symtypes.tlist(simsym.SInt, MboxMsg), lck = Lock)):
+    @model.methodwrap(l = Lock)
+    def init(self, l):
+        # init msgs
+        self.lck = l
+
+    @model.methodwrap(m = MboxMsg)
+    def post_message(self, m):
+        self.lck.lock()
+        self.msgs.append(m)
+        self.lck.unlock()
+
+    @model.methodwrap()
+    def have_messages(self):
+        self.lck.lock()
+        r = (self.msgs.len() > 0)
+        self.lck.unlock()
+        return r
+
+    @model.methodwrap()
+    def next_message(self):
+        self.lck.lock()
+        x = self.msgs[0]
+        self.msgs.shift(1)
+        self.lck.unlock()
+        return x
+
+
 
 #=============================================
 #
@@ -395,7 +446,7 @@ class Context(simsym.struct(ptab = ProcessTable, shed = LowLevelScheduler, hw = 
 # Each element should be described as two maps:
 # [(current.id => current.prev().id), (current.id => current.next().id)]
 # use tdict for implementation
-# So the set of keys of the two dictionary procs_prev and procs_next shold be identical!!!
+# Notice the sets of keys of the two dictionary procs_prev and procs_next shold be identical!!!
 class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                                   procs_prev = simsym.tdict(PRef, PRef),
                                   procs_next = simsym.tdict(PRef, PRef))):
@@ -415,7 +466,12 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         self.procs_next = simsym.tdict(PRef, PRef).var()
 
     @model.methodwrap(pid = PRef, pprio = Prio)
-    def enqueueProcPrioQueue(self, pid, pprio):
+    def enqueue_proc_prio_queue(self, pid, pprio):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        simsym.assume(pprio >= 0)
+        simsym.assume(pprio <= MAXPROCS)
+
         self.qprio.create(pid)
         self.qprio[pid] = pprio
 
@@ -443,22 +499,8 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 procs_prev[pid] = pcut
                 proces_next[pcut] = pid
 
-    def nextFromProcPrioQueue(self):
-        
-
-    @model.methodwrap(self, pid = PRef)
-    def isInProcPrioQueue(self):
-        return {'r': self.procs_prev.contains(pid)}
-
-    def isEmptyProcPrioQueue(self):
-        return {'r': self.procs_prev.empty()}
-
-    @model.methodwrap(pid = PRef)
-    def prioOfProcInProcPrioQueue(self, pid):
-        return {'r': self.qprio[pid]}
-
-    @model.methodwrap(pid = PRef)
-    def removePrioQueueElem(self, pid):
+    def next_from_proc_prio_queue(self):
+        simsym.assume
         phead = PRef.var()        
         simsym.exists(phead, procs_prev[phead] == NULLPROCREF)
         if (procs_next[phead] != NULLPROCREF):
@@ -468,12 +510,79 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         del procs_prev[phead]
         def qprio[phead]
 
-    @model.methodwrap(pid = PRef, newprio = Prio)    
-    def reorderProcPrioQueue(pid, newprio):
-        removePrioQueueElem(pid)
-        enqueueProcPrioQueue(pid, newprio):
+        return phead;
+
         
 
+    @model.methodwrap(self, pid = PRef)
+    def is_in_proc_prio_queue(self):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        return self.procs_prev.contains(pid)
+
+    def is_empty_proc_prio_queue(self):
+        return  self.procs_prev.empty()
+
+    @model.methodwrap(pid = PRef)
+    def prio_of_proc_in_proc_prio_queue(self, pid):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF) 
+        simsym.assume(qprio.contains(pid)) 
+        return self.qprio[pid]
+
+    @model.methodwrap(pid = PRef)
+    def remove_prio_queue_elem(self, pid):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        simsym.assume(qprio.contains(pid))
+
+        if (procs_next[pid] != NULLPROCREF):
+            procs_prev[procs_next[pid]] = procs_prev[pid]
+        if (procs_prev[pid] != NULLPROCREF):
+            procs_next[procs_prev[pid]] = procs_next[pid]
+        # is this the correct way to delete an element from the tdict?
+        del procs_next[phead]
+        del procs_prev[phead]
+        def qprio[phead]
+
+    @model.methodwrap(pid = PRef, newprio = Prio)    
+    def reorder_proc_prio_queue(pid, newprio):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        simsym.assume(qprio.contains(pid))
+        simsym.assume(newprio >= 0)
+        simsym.assume(newprio <= MAXPROCS)
+ 
+        remove_prio_queue_elem(pid)
+        enqueue_proc_prio_queue(pid, newprio)
+
+
+#=============================================
+#
+# 3.6 Current Process and Prioritised Read Queue
+#
+#=============================================
+class CurrentProcess(simsym.struct(currentp = PRef,
+                                   readyqp = ProcPrioQueue,
+                                   ctxt = Context,
+                                   lck = Lock)):
+    @model.methodwrap(ct = Context, lk = Lock)
+    def init(self, ct, lk):
+        self.readyqp.init()
+        self.currenttp = NULLPROCREF
+        self.lck = lk
+        self.ctxt = ct
+
+    def current_process(self):
+        return currentp
+    
+    @model.methodwrap(pid = PRef)
+    def make_current(self, pid):
+        simsym.assume(pid >= NULLPROCREF)
+        simsym.assume(pid <= IDLEPROCREF)
+        currentp = pid
+
+    def make_read
 
 
 
