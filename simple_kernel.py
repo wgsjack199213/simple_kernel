@@ -68,6 +68,7 @@ INTON = 1
 class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
     def _declare_assumptions(self, assume):
         super(ProcessQueue, self)._declare_assumptions(assume)
+        # 'iseq' restriction
         i = simsym.SInt.var()
         j = simsym.SInt.var()        
         assume(simsym.symnot(simsym.exists(i, simsym.exitsts(j, simsym.symand(i != j, i >= 0, j >= 0, i < self.elts.len(), j < self.elts.len(), self.elts[i] == self.elts[j])))))
@@ -342,7 +343,85 @@ class ProcessDescr(simsym.struct(prio = Prio,
 #
 #=============================================
 
-# Wang Guosai is working here
+# In order to define the var 'procs' of ProcPrioQueue,
+# new var should be defined to implement the operation described below conveniently.
+# Each element should be described as two maps:
+# [(current.id => current.prev().id), (current.id => current.next().id)]
+# use tdict for implementation
+# So the set of keys of the two dictionary procs_prev and procs_next shold be identical!!!
+class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
+                                  procs_prev = simsym.tdict(PRef, PRef),
+                                  procs_next = simsym.tdict(PRef, PRef))):
+    def _declare_assumptions(self, assume):
+        super(ProcessQueue, self)._declare_assumptions(assume)
+        # injection restriction        
+        k = PRef.var()
+        assume(forall(k, implies(qprio.contains(k), symand(procs_prev.contains(k), procs_next.contains(k)))))
+        # 'iseq' restriction
+        # ? As I use two dicts rather than one queue to define procs, maybe I do not need to specify this restriction?
+        
+        # priority order restriction
+        assume(forall(k, implies(qprio.contains(k), symand(symor(procs_prev[k] == NULLPROCREF, qprio[procs_prev[k]] < qprio[k]), symor(procs_next[k] == NULLPROCREF, qprio[procs_next[k]] > qprio[k]))))
+
+    def init(self):
+        self.procs_prev = simsym.tdict(PRef, PRef).var()
+        self.procs_next = simsym.tdict(PRef, PRef).var()
+   
+    @model.methodwrap(pid = PRef, pprio = Prio)     
+    def enqueueProcPrioQueue(self, pid, pprio):
+        self.qprio.create(pid)
+        self.qprio[pid] = pprio
+
+        if procs_prev.empty():                  # empty queue
+            procs_prev.create(pid)
+            procs_prev[pid] = NULLPROCREF
+            procs_next.create(pid)        
+            procs_next[pid] = NULLPROCREF
+        else:                                   # find the right place to add the new pid in
+            pcut = PRef.var()
+            # find a process with higer priority
+            if simsym.exists(pcut, symand(qprio.contains(pcut), qprio[pcut] >= pprio, symor(qprio[proces_prev[pcut]] < pprio, proces_prev[pcut] == NULLPROCREF))):
+                # --- < pid <= pcut <= ---
+                procs_prev.create(pid)
+                procs_prev[pid] = proces_prev[pcut]
+                procs_next.create(pid)
+                procs_next[pid] = pcut
+                proces_prev[pcut] = pid
+            # find a process with lower priority
+            else simsym.exists(pcut, symand(qprio.contains(pcut), qprio[pcut] <= pprio, symor(qprio[proces_next[pcut]] > pprio, proces_next[pcut] == NULLPROCREF))):
+                # --- <= pcut <= pid < ---
+                procs_next.create(pid)
+                procs_next[pid] = proces_next[pcut]
+                procs_prev.create(pid)
+                procs_prev[pid] = pcut
+                proces_next[pcut] = pid
+
+    def nextFromProcPrioQueue(self):
+        ???
+
+    @model.methodwrap(self, pid = PRef) 
+    def isInProcPrioQueue(self):
+        return {'r': self.procs_prev.contains(pid)}
+
+    def isEmptyProcPrioQueue(self):
+        return {'r': self.procs_prev.empty()}
+
+    @model.methodwrap(pid = PRef) 
+    def prioOfProcInProcPrioQueue(self, pid):
+        return {'r': self.qprio[pid]}
+
+    @model.methodwrap(pid = PRef) 
+    def removePrioQueueElem(self, pid):
+        ???
+        
+        
+
+
+
+
+
+
+
 
 
 
