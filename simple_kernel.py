@@ -1,5 +1,4 @@
 import simsym
-import simsym
 import symtypes
 import errno
 import model
@@ -66,7 +65,7 @@ INTON = 1
 # Process Queue
 #=========================================
 
-class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
+class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref))):
     def _declare_assumptions(self, assume):
         super(ProcessQueue, self)._declare_assumptions(assume)
         i = simsym.SInt.var()
@@ -87,13 +86,13 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
     def enqueue(self, x):
         self.elts.append(x)
 
-    def remove_first:
+    def remove_first(self):
         simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
         self.elts.shift(1)
         return {'r': x}
 
-    def queue_front:
+    def queue_front(self):
         simsym.assume(self.elts.len() > 0)
         x = self.elts[0]
         return {'r': x}
@@ -101,12 +100,15 @@ class ProcessQueue(simsym.tstrutct(elts = symtypes.tlist(simsym.SInt, APref)):
     @model.methodwrap(x = APref)
     def remove_element(self, x):
         i = simsym.SInt.var()
-        simsym.assume(simsym.exists(i, simsym.symand(self.elts.len() > i, self.elts[i] == x))
+        simsym.assume(simsym.exists(i, simsym.symand(self.elts.len() > i, self.elts[i] == x)))
         newElts = symtypes.tlist(simsym.SInt, APref).var()
-        for k in range self.elts.len():
-            if k == i:
-                continue
-            newElts.append(elts[k])
+        k = simsym.SInt.var()
+        k = 0
+        while k < self.elts.len():
+            if k != i:
+                newElts.append(elts[k])
+            k = k + 1
+            
         self.elts = newElts
 
 
