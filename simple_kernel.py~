@@ -622,8 +622,8 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
         simsym.assume(newprio >= 0)
         simsym.assume(newprio <= MAXPROCS)
  
-        remove_prio_queue_elem(pid)
-        enqueue_proc_prio_queue(pid, newprio)
+        self.remove_prio_queue_elem(pid)
+        self.enqueue_proc_prio_queue(pid, newprio)
 
 
 #=============================================
@@ -634,7 +634,8 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
 class CurrentProcess(simsym.struct(currentp = PRef,
                                    readyqp = ProcPrioQueue,
                                    ctxt = Context,
-                                   lck = Lock)):
+                                   lck = Lock,
+                                   ptab = ProcessTable)):
     @model.methodwrap(ct = Context, lk = Lock)
     def init(self, ct, lk):
         self.readyqp.init()
@@ -651,11 +652,10 @@ class CurrentProcess(simsym.struct(currentp = PRef,
         simsym.assume(pid <= IDLEPROCREF)
         self.currentp = pid
 
-    @model.methodwrap(ptab = ProcessTable)
-    def make_ready(self, ptab):
+    def make_ready(self):
         # Where the hell does the 'ptab' come from?!?! 凸=_=
         # I don't know why there shoud be an 'exists' here =___=
-        pd = ptab.descr_of_process(self.currentp)
+        pd = self.ptab.descr_of_process(self.currentp)
         prio = pd.process_priority()
         pd.set_process_status_to_ready()
         self.readyqp.enqueue_proc_prio_queue(prio)
@@ -677,31 +677,54 @@ class CurrentProcess(simsym.struct(currentp = PRef,
     
     @model.methodwrap(pid = PRef)
     def make_unready(self, pid):
+        
         simsym.assume(pid >= NULLPROCREF)
         simsym.assume(pid <= IDLEPROCREF)
         self.lck.lock()
         if is_current_proc(pid):
             self.ctxt.save_state()
-            run_next_process()
+            self.run_next_process()
             self.lck.unlock()
         else:
-            remove_prio_queue_elem(pid)
+            self.readyqp.remove_prio_queue_elem(pid)
             self.lck.unlock()
 
-    @model.methodwrap(ptab = ProcessTable)
-    def suspend_current(self, ptab):
+    def suspend_current(self):
         # Where the hell does the 'ptab' come from again?!?! 凸=_=
         self.lck.lock()
         self.ctxt.save_state()
-        pd = ptab.descr_of_process(self.currentp)
+        pd = self.ptab.descr_of_process(self.currentp)
         prio = pd.process_priority()
         pd.set_process_status_to_waiting()
         self.readyqp.enqueue_proc_prio_queue(currentp, prio)
-        run_next_process()
+        self.run_next_process()
+        self.lck.lock()
 
         return pd, prio
         
+    def run_next_process(self):
+        self.schedule_next()
+        self.ctxt.restore_state()
 
+    def schedule_next(self):
+        self.lck.lock()
+        # I added a new instance variable ptab in this class
+        # I don't know how to implement schedule_next
+        if self.readyqp.is_empty():
+            self.select_idle_process()
+        else:
+            p = self.readyqp.next_from_proc_prio_queue()
+            pd = self.ptab.descr_of_process(p)
+            self.readyqp.make_current(p)
+            pd.set_process_status_to_running(p)
+        
+        self.run_next_process()
+        self.lck.unlock()
+
+        return pd, p
+
+    def select_idle_process(self):
+        self.currentp = IDLEPROCREF
 
 
 
