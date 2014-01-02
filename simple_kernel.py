@@ -12,7 +12,7 @@ IDLEPROCREF = MAXPROCS
 
 #=============================================
 #
-# Primary types
+# 3.1 Primary Types
 #
 #=============================================
 
@@ -56,7 +56,7 @@ INTON = 1
 
 #=============================================
 #
-# Basic Abstractions
+# 3.4 Basic Abstractions
 #
 #=============================================
 
@@ -238,7 +238,7 @@ class Semaphore(simsym.tstruct(waiters = ProcessQueue,
         self.lck.unlock()
 
 #=========================================
-# ProcessDescr
+# Process Descriptor
 #=========================================
 
 class ProcessDescr(simsym.struct(prio = Prio,
@@ -327,5 +327,22 @@ class ProcessDescr(simsym.struct(prio = Prio,
         self.ip = pip
         self.statuswd = pstatwd
         self.pstack = pstack
+
+
+
+
+
+
+
+
+
+#=============================================
+#
+# 3.5 Priority Queue
+#
+#=============================================
+
+# Wang Guosai is working here
+
 
 
