@@ -397,7 +397,7 @@ class ProcPrioQueue(simsym.struct(qprio = simsym.tdict(PRef, Prio),
                 proces_next[pcut] = pid
 
     def nextFromProcPrioQueue(self):
-        ???
+        
 
     @model.methodwrap(self, pid = PRef) 
     def isInProcPrioQueue(self):
