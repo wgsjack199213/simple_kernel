@@ -2,6 +2,8 @@
 
 *Tumanov A, Zhu T, Park J W, et al. TetriSched: global rescheduling with adaptive plan-ahead in dynamic heterogeneous clusters[C]// Eleventh European Conference on Computer Systems. ACM, 2016.*
 
+<https://www.researchgate.net/publication/301282086_TetriSched_global_rescheduling_with_adaptive_plan-ahead_in_dynamic_heterogeneous_clusters>
+
 TetriSched是一个在在线任务（deadline严格的重要商业任务）和离线任务混布的环境中工作的调度器。它利用了商业任务的可预测性，来优化资源分配的方案，总体目标是为了提升商业任务的SLO和集群的整理利用率。
 
 研究者们说商业任务（SLO严格的任务）可预测（完成时间）主要原因是它们经常是被周期性地，批量地提交，而且运行时间长，数据量大。然而当前的Hadoop/Yarn集群调度器的框架却没有充分利用任务相关的一些信息、知识，对于自愿的分配是静态的。研究者们希望设计一种调度器去理解任务的要求，折衷，运行时间估计，并利用这些信息做短期的调度决策和长期的调度计划（对未来任务的预测）。
